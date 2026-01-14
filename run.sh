@@ -15,13 +15,16 @@ docker rm -f $CONTAINER 2>/dev/null || true
 
 echo "[3/4] Run container"
 docker run -d \
-  --name $CONTAINER \
+  --name onlog-msk-producer \
   --restart unless-stopped \
-  -e KAFKA_BOOTSTRAP_SERVERS="$KAFKA_BOOTSTRAP_SERVERS" \
-  -e DB_BASE_PATH="$DB_BASE_PATH" \
-  -e TOPIC_PREFIX="$TOPIC_PREFIX" \
+  -e AWS_ACCESS_KEY_ID \
+  -e AWS_SECRET_ACCESS_KEY \
+  -e AWS_REGION \
+  -e KAFKA_BOOTSTRAP_SERVERS \
+  -e DB_BASE_PATH \
+  -e TOPIC_PREFIX \
   -v "$DB_BASE_PATH:$DB_BASE_PATH:ro" \
-  $IMAGE
+  onlog/msk-producer:latest
 
 echo "[4/4] Done"
 docker ps | grep $CONTAINER
