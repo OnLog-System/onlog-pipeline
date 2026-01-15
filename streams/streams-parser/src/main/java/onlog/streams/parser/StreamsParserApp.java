@@ -27,6 +27,9 @@ public class StreamsParserApp {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
                 "org.apache.kafka.common.serialization.Serdes$StringSerde");
 
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                EdgeIngestTimeExtractor.class);
+
         StreamsBuilder builder = new StreamsBuilder();
         ParserTopology.build(builder);
 

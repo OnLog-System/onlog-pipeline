@@ -33,11 +33,23 @@ public class DedupTransformer
 
         String key = v.devEui + ":" + v.fCnt;
         long now = v.edgeIngestTime.toEpochMilli();
+        long ttl = ParserConfig.DEDUP_TTL.toMillis();
 
         Long last = store.get(key);
-        if (last == null || now - last > ParserConfig.DEDUP_TTL.toMillis()) {
+
+        // 중복이 아니면 통과
+        if (last == null) {
             store.put(key, now);
             context.forward(record);
+            return;
         }
+
+        // TTL 초과 → 새로운 이벤트로 간주 + 기존 key 정리
+        if (now - last > ttl) {
+            store.put(key, now);   // overwrite
+            context.forward(record);
+            return;
+        }
+
+        // TTL 이내 → duplicate → drop
     }
-}
