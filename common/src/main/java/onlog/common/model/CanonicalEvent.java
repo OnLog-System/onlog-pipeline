@@ -45,5 +45,5 @@ public class CanonicalEvent {
     // =========================
     // Optional meta 둘지 말지 결정하자!
     // =========================
-    public Map<String, Object> meta;
+    // public Map<String, Object> meta;
 }

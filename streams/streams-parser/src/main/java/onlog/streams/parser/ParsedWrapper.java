@@ -19,8 +19,17 @@ public class ParsedWrapper {
     public String deviceType;
     public String metric;
 
+    // =========================
+    // Decoded values
+    // =========================
     public Double valueNum;
     public Boolean valueBool;
+
+    public Integer batteryMv;
+    public String batteryStatus;
+
+    public Double temperature;
+    public Double humidity;
 
     public Integer fCnt;
 

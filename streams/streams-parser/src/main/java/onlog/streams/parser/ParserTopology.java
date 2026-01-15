@@ -65,8 +65,14 @@ public class ParserTopology {
         // =========================
         KStream<String, ParsedWrapper>[] branches =
             deduped.branch(
-                // DLQ: parse error
-                (k, v) -> v.meta != null && v.meta.containsKey("error"),
+                // DLQ: 구조적/계약 위반
+                (k, v) ->
+                    v == null
+                    || v.meta != null && v.meta.containsKey("error")
+                    || v.edgeIngestTime == null
+                    || v.devEui == null
+                    || v.metric == null,
+
                 // 정상
                 (k, v) -> true
             );
@@ -132,34 +138,37 @@ public class ParserTopology {
             w.devEui = payload.path("deviceInfo").path("devEui").asText(null);
             w.fCnt   = payload.has("fCnt") ? payload.get("fCnt").asInt() : null;
 
-            // -------------------------
-            // Value normalization
-            // -------------------------
-            if (payload.has("value")) {
-                w.valueNum = payload.get("value").asDouble();
-            }
-            if (payload.has("value_bool")) {
-                w.valueBool = payload.get("value_bool").asBoolean();
-            }
-            if (payload.has("values") && payload.get("values").has("weight")) {
-                w.valueNum = payload.get("values").get("weight").asDouble();
-            }
+            // =========================
+            // Base64 payload decode
+            // =========================
+            if (payload.has("data")) {
 
-            // -------------------------
-            // Meta (reference)
-            // -------------------------
-            Map<String, Object> meta = new HashMap<>();
-            meta.put("payload", payload);
-            w.meta = meta;
+                BatteryPayloadDecoder.Decoded d =
+                    BatteryPayloadDecoder.decode(
+                        payload.get("data").asText()
+                    );
+
+                w.batteryMv     = d.batteryMv();
+                w.batteryStatus = d.batteryStatus();
+                w.temperature   = d.temperature();
+                w.humidity      = d.humidity();
+
+                // metric routing
+                if (w.metric != null) {
+                    switch (w.metric) {
+                        case "TEMP" -> w.valueNum = w.temperature;
+                        case "HUMIDITY" -> w.valueNum = w.humidity;
+                        case "BATTERY_MV" -> w.valueNum = (double) w.batteryMv;
+                    }
+                }
+            }
 
             return w;
 
         } catch (Exception e) {
-            // 실패도 이벤트로 남긴다
             Map<String, Object> meta = new HashMap<>();
             meta.put("error", "PARSE_FAILED");
             meta.put("raw", raw);
-            meta.put("exception", e.getClass().getSimpleName());
             w.meta = meta;
             return w;
         }
@@ -192,7 +201,6 @@ public class ParserTopology {
                 w.metric
         );
 
-        e.meta = w.meta;
         return e;
     }
 }
