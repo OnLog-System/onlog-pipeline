@@ -26,6 +26,11 @@ public class DedupTransformer
             return;
         }
 
+        if (v.edgeIngestTime == null) {
+            context.forward(record);
+            return;
+        }
+
         String key = v.devEui + ":" + v.fCnt;
         long now = v.edgeIngestTime.toEpochMilli();
 

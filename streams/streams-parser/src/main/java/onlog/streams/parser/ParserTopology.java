@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import onlog.common.model.CanonicalEvent;
 import onlog.common.serde.CanonicalEventSerde;
+import onlog.common.serde.JsonSerde;
 import onlog.common.time.TimeNormalizer;
 import onlog.common.util.SourceIdUtil;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.Stores;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -19,7 +21,10 @@ public class ParserTopology {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static void build(StreamsBuilder builder) {
-        
+
+        // =========================
+        // Dedup StateStore
+        // =========================
         builder.addStateStore(
             Stores.keyValueStoreBuilder(
                 DedupStoreSupplier.supplier(),
@@ -45,14 +50,47 @@ public class ParserTopology {
                    .merge(machine)
                    .mapValues(ParserTopology::parseRaw);
 
+        // =========================
+        // Dedup
+        // =========================
         KStream<String, ParsedWrapper> deduped =
-            parsed.process(
+            parsed.transform(
                 DedupTransformer::new,
                 Named.as("dedup"),
                 DedupStoreSupplier.STORE_NAME
             );
 
-        deduped
+        // =========================
+        // 정상 / 에러 분기
+        // =========================
+        KStream<String, ParsedWrapper>[] branches =
+            deduped.branch(
+                // DLQ: parse error
+                (k, v) -> v.meta != null && v.meta.containsKey("error"),
+                // 정상
+                (k, v) -> true
+            );
+
+        // =========================
+        // DLQ topic
+        // =========================
+        branches[0]
+            .mapValues(v -> {
+                ParseErrorEvent e = new ParseErrorEvent();
+                e.occurredAt = Instant.now();
+                e.reason = String.valueOf(v.meta.get("error"));
+                e.raw = String.valueOf(v.meta.get("raw"));
+                return e;
+            })
+            .to(
+                "sensor.parse.dlq",
+                Produced.with(Serdes.String(), new JsonSerde<>(ParseErrorEvent.class))
+            );
+
+        // =========================
+        // 정상 Canonical flow
+        // =========================
+        branches[1]
             .mapValues(ParserTopology::toCanonical)
             .to(
                 ParserConfig.OUTPUT_TOPIC,
@@ -61,29 +99,35 @@ public class ParserTopology {
     }
 
     private static ParsedWrapper parseRaw(String raw) {
+
+        ParsedWrapper w = new ParsedWrapper();
+
         try {
             JsonNode root = MAPPER.readTree(raw);
-            ParsedWrapper w = new ParsedWrapper();
 
             // -------------------------
-            // edge_ingest_time (single truth)
+            // edge_ingest_time
             // -------------------------
             w.edgeIngestTime =
-                    TimeNormalizer.parseIso(root.get("received_at").asText());
+                TimeNormalizer.parseIso(
+                    root.path("received_at").asText(null)
+                );
 
             // -------------------------
             // Routing meta
             // -------------------------
-            w.tenantId = root.path("tenant_id").asText();
-            w.lineId   = root.path("line_id").asText(null);
-            w.process  = root.path("process").asText(null);
-            w.deviceType = root.path("device_type").asText();
-            w.metric     = root.path("metric").asText();
+            w.tenantId   = root.path("tenant_id").asText(null);
+            w.lineId     = root.path("line_id").asText(null);
+            w.process    = root.path("process").asText(null);
+            w.deviceType = root.path("device_type").asText(null);
+            w.metric     = root.path("metric").asText(null);
 
             // -------------------------
             // Payload
             // -------------------------
-            JsonNode payload = MAPPER.readTree(root.get("payload").asText());
+            JsonNode payload = MAPPER.readTree(
+                root.path("payload").asText()
+            );
 
             w.devEui = payload.path("deviceInfo").path("devEui").asText(null);
             w.fCnt   = payload.has("fCnt") ? payload.get("fCnt").asInt() : null;
@@ -102,7 +146,7 @@ public class ParserTopology {
             }
 
             // -------------------------
-            // Meta (reference only)
+            // Meta (reference)
             // -------------------------
             Map<String, Object> meta = new HashMap<>();
             meta.put("payload", payload);
@@ -111,7 +155,13 @@ public class ParserTopology {
             return w;
 
         } catch (Exception e) {
-            return null;
+            // 실패도 이벤트로 남긴다
+            Map<String, Object> meta = new HashMap<>();
+            meta.put("error", "PARSE_FAILED");
+            meta.put("raw", raw);
+            meta.put("exception", e.getClass().getSimpleName());
+            w.meta = meta;
+            return w;
         }
     }
 
