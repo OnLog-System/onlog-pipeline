@@ -46,7 +46,7 @@ public class KpiTopology {
             .windowedBy(window)
             .aggregate(
                     () -> 0.0,
-                    ProductionAggregator::add,
+                    (key, event, agg) -> ProductionAggregator.add(agg, event),
                     Materialized.with(
                             Serdes.String(),
                             Serdes.Double()
@@ -79,7 +79,7 @@ public class KpiTopology {
             .groupByKey()
             .windowedBy(window)
             .aggregate(
-                    YieldAggregator.YieldCount::new,
+                    (key, event, agg) -> YieldAggregator.add(agg, event),
                     YieldAggregator::add,
                     Materialized.with(
                             Serdes.String(),
