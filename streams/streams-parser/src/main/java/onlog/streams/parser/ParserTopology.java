@@ -22,6 +22,17 @@ public class ParserTopology {
 
     public static void build(StreamsBuilder builder) {
 
+        // =========================
+        // Dedup StateStore
+        // =========================
+        builder.addStateStore(
+            Stores.keyValueStoreBuilder(
+                DedupStoreSupplier.supplier(),
+                Serdes.String(),
+                Serdes.Long()
+            )
+        );
+
         KStream<String, String> env =
                 builder.stream(ParserConfig.TOPIC_ENV,
                         Consumed.with(Serdes.String(), Serdes.String()));
@@ -40,10 +51,20 @@ public class ParserTopology {
                    .mapValues(ParserTopology::parseRaw);
 
         // =========================
+        // Dedup
+        // =========================
+        KStream<String, ParsedWrapper> deduped =
+            parsed.transform(
+                DedupTransformer::new,
+                Named.as("dedup"),
+                DedupStoreSupplier.STORE_NAME
+            );
+            
+        // =========================
         // 정상 / 에러 분기
         // =========================
         KStream<String, ParsedWrapper>[] branches =
-            parsed.branch(
+            deduped.branch(
                 // DLQ: 구조적/계약 위반
                 (k, v) ->
                     v == null
@@ -84,7 +105,7 @@ public class ParserTopology {
         branches[1]
             .mapValues(ParserTopology::toCanonical)
             .to(
-                ParserConfig.INTERMEDIATE_TOPIC,
+                ParserConfig.OUTPUT_TOPIC,
                 Produced.with(Serdes.String(), new CanonicalEventSerde())
             );
     }
