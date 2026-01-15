@@ -7,8 +7,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.*;
 
-import java.time.Duration;
-
 public class KpiTopology {
 
     public static void build(StreamsBuilder builder) {
@@ -53,10 +51,12 @@ public class KpiTopology {
                     )
             )
             .toStream()
-            .mapValues((w, total) ->
+            // Windowed<String> → String
+            .selectKey((windowedKey, v) -> windowedKey.key())
+            .mapValues((k, total) ->
                     KpiEvent.production(
-                            w.window().endTime().toEpochMilli(),
-                            w.key(),
+                            System.currentTimeMillis(),
+                            k,
                             total
                     )
             )
@@ -79,18 +79,20 @@ public class KpiTopology {
             .groupByKey()
             .windowedBy(window)
             .aggregate(
+                    YieldAggregator.YieldCount::new,
                     (key, event, agg) -> YieldAggregator.add(agg, event),
-                    YieldAggregator::add,
                     Materialized.with(
                             Serdes.String(),
                             new JsonSerde<>(YieldAggregator.YieldCount.class)
                     )
             )
             .toStream()
-            .mapValues((w, yc) ->
+            // Windowed<String> → String
+            .selectKey((windowedKey, v) -> windowedKey.key())
+            .mapValues((k, yc) ->
                     KpiEvent.yield(
-                            w.window().endTime().toEpochMilli(),
-                            w.key(),
+                            System.currentTimeMillis(),
+                            k,
                             yc.ratio()
                     )
             )
