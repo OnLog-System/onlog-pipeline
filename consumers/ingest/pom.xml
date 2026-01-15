@@ -7,7 +7,7 @@
     <version>0.1.0</version>
   </parent>
 
-  <artifactId>common</artifactId>
+  <artifactId>ingest</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
@@ -20,6 +20,12 @@
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>onlog</groupId>
+      <artifactId>common</artifactId>
+      <version>1.0.0</version>
     </dependency>
   </dependencies>
 </project>

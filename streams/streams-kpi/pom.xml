@@ -1,25 +1,30 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>onlog</groupId>
+  <parent>
+    <groupId>onlog</groupId>
+    <artifactId>onlog-pipeline</artifactId>
+    <version>0.1.0</version>
+  </parent>
+
   <artifactId>streams-kpi</artifactId>
   <version>1.0.0</version>
 
   <dependencies>
-
-    <!-- Kafka Streams -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-streams</artifactId>
-      <version>3.7.0</version>
     </dependency>
 
-    <!-- Common -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>onlog</groupId>
       <artifactId>common</artifactId>
       <version>1.0.0</version>
     </dependency>
-
   </dependencies>
 </project>
