@@ -3,7 +3,6 @@ import kafka.KafkaSender;
 import model.RawLogRow;
 import sqlite.RawLogRepository;
 import sqlite.SqliteClient;
-import time.TimeSlot;
 
 import java.io.File;
 import java.sql.Connection;
@@ -42,50 +41,54 @@ public class Main {
     }
 
     // ==================================================
-    // Realtime (slot catch-up, miss-free)
+    // Realtime (event-time replay, wall-clock driven)
     // ==================================================
     private static void runRealtime(String basePath, KafkaSender sender) throws Exception {
 
-        Instant lastProcessedSlot = null;
+        Instant lastSentTime = null;
+
+        File[] dbFiles = new File(basePath)
+                .listFiles(f -> f.getName().endsWith(".sqlite"));
+
+        if (dbFiles == null || dbFiles.length == 0) {
+            System.out.println("[Realtime] no sqlite files found");
+            return;
+        }
+
+        System.out.println("[Realtime] event-time based replay");
 
         while (true) {
 
-            Instant currentSlot = TimeSlot.currentSlot();
+            Instant now = Instant.now();
 
-            if (lastProcessedSlot == null) {
-                lastProcessedSlot = currentSlot.minusSeconds(10);
-                System.out.println("[Realtime start] from slot " + lastProcessedSlot);
+            if (lastSentTime == null) {
+                // 최초 시작 시점: 현재보다 살짝 과거
+                lastSentTime = now.minusSeconds(10);
+                System.out.println("[Realtime start] from " + lastSentTime);
             }
 
-            while (lastProcessedSlot.isBefore(currentSlot)) {
+            for (File db : dbFiles) {
 
-                Instant slot = lastProcessedSlot.plusSeconds(10);
+                try (Connection conn = SqliteClient.connect(db.getAbsolutePath())) {
 
-                File[] dbFiles = new File(basePath)
-                        .listFiles(f -> f.getName().endsWith(".sqlite"));
+                    RawLogRepository repo = new RawLogRepository(conn);
+                    List<RawLogRow> rows = repo.findBetween(lastSentTime, now);
 
-                if (dbFiles != null) {
-                    for (File db : dbFiles) {
+                    if (!rows.isEmpty()) {
+                        System.out.printf(
+                            "[Realtime] db=%s rows=%d (%s → %s)%n",
+                            db.getName(),
+                            rows.size(),
+                            lastSentTime,
+                            now
+                        );
+                    }
 
-                        try (Connection conn = SqliteClient.connect(db.getAbsolutePath())) {
-                            RawLogRepository repo = new RawLogRepository(conn);
-                            List<RawLogRow> rows = repo.findBySlot(slot);
-
-                            if (!rows.isEmpty()) {
-                                System.out.printf(
-                                    "[Realtime] slot=%s db=%s rows=%d%n",
-                                    slot, db.getName(), rows.size()
-                                );
-                            }
-
-                            for (RawLogRow row : rows) {
-                                sender.send(row);
-                            }
-                        }
+                    for (RawLogRow row : rows) {
+                        sender.send(row);
+                        lastSentTime = row.receivedAt;
                     }
                 }
-
-                lastProcessedSlot = slot;
             }
 
             Thread.sleep(500);
@@ -100,7 +103,7 @@ public class Main {
         File[] dbFiles = new File(basePath)
                 .listFiles(f -> f.getName().endsWith(".sqlite"));
 
-        if (dbFiles == null) return;
+        if (dbFiles == null || dbFiles.length == 0) return;
 
         final int FLUSH_EVERY = 5_000;
         final int SLEEP_MS   = 5;

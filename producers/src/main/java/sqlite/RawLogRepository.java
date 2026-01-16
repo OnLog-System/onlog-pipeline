@@ -21,20 +21,25 @@ public class RawLogRepository {
         this.conn = conn;
     }
 
-    public List<RawLogRow> findBySlot(Instant slot) throws Exception {
+    /**
+     * (from, to] 구간의 데이터를 전부 가져온다
+     */
+    public List<RawLogRow> findBetween(Instant from, Instant to) throws Exception {
 
         String sql = """
             SELECT id, received_at, topic, tenant_id, line_id,
                    process, device_type, metric, payload
             FROM raw_logs
-            WHERE received_at = ?
-            ORDER BY tenant_id, line_id, device_type, metric
+            WHERE received_at > ?
+              AND received_at <= ?
+            ORDER BY received_at ASC
         """;
 
         List<RawLogRow> rows = new ArrayList<>();
 
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, slot.toString());
+            ps.setString(1, from.toString());
+            ps.setString(2, to.toString());
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -60,11 +65,14 @@ public class RawLogRepository {
         return rows;
     }
 
+    /**
+     * Backfill 전용
+     */
     public List<RawLogRow> findAllOrdered() throws Exception {
 
         String sql = """
             SELECT id, received_at, topic, tenant_id, line_id,
-                process, device_type, metric, payload
+                   process, device_type, metric, payload
             FROM raw_logs
             ORDER BY received_at ASC
         """;
@@ -72,7 +80,7 @@ public class RawLogRepository {
         List<RawLogRow> rows = new ArrayList<>();
 
         try (PreparedStatement ps = conn.prepareStatement(sql);
-            ResultSet rs = ps.executeQuery()) {
+             ResultSet rs = ps.executeQuery()) {
 
             while (rs.next()) {
                 RawLogRow r = new RawLogRow();
@@ -95,7 +103,6 @@ public class RawLogRepository {
         }
         return rows;
     }
-
 
     private String extractDevEui(String payload) {
         if (payload == null) return null;
