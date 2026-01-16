@@ -22,12 +22,14 @@ public class EnvWriter {
           device_type,
           metric,
           dev_eui,
+          device_name,
           temperature,
           humidity,
           battery_mv,
+          battery_status,
           source_id
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """;
 
     public static void write(CanonicalEvent e) throws Exception {
@@ -35,21 +37,36 @@ public class EnvWriter {
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(SQL)) {
 
+            // =========================
+            // Time
+            // =========================
             ps.setObject(1, e.eventTime);
             ps.setObject(2, e.edgeIngestTime);
 
+            // =========================
+            // Identity
+            // =========================
             ps.setString(3, e.tenantId);
             ps.setString(4, e.lineId);
             ps.setString(5, e.process);
             ps.setString(6, e.deviceType);
             ps.setString(7, e.metric);
-            ps.setString(8, e.deviceName);
-            ps.setString(9, e.devEui);
 
+            ps.setString(8,  e.devEui);
+            ps.setString(9,  e.deviceName);
+
+            // =========================
+            // Values
+            // =========================
             ps.setObject(10, e.temperature);
             ps.setObject(11, e.humidity);
             ps.setObject(12, e.batteryMv);
-            ps.setString(13, e.sourceId);
+            ps.setString(13, e.batteryStatus);
+
+            // =========================
+            // Source
+            // =========================
+            ps.setString(14, e.sourceId);
 
             ps.executeUpdate();
         }
