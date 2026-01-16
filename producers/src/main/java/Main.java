@@ -7,9 +7,7 @@ import sqlite.SqliteClient;
 import java.io.File;
 import java.sql.Connection;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Main {
 
@@ -55,7 +53,6 @@ public class Main {
             return;
         }
 
-        // 🔑 DB별 lastSentTime
         Map<String, Instant> lastSentPerDb = new HashMap<>();
 
         System.out.println("[Realtime] event-time based replay (per DB)");
@@ -70,7 +67,6 @@ public class Main {
                 Instant lastSent = lastSentPerDb.get(dbName);
 
                 if (lastSent == null) {
-                    // DB별 최초 시작 시점
                     lastSent = now.minusSeconds(10);
                     lastSentPerDb.put(dbName, lastSent);
                     System.out.println(
@@ -86,10 +82,7 @@ public class Main {
                     if (!rows.isEmpty()) {
                         System.out.printf(
                             "[Realtime] db=%s rows=%d (%s → %s)%n",
-                            dbName,
-                            rows.size(),
-                            lastSent,
-                            now
+                            dbName, rows.size(), lastSent, now
                         );
                     }
 
@@ -98,7 +91,6 @@ public class Main {
                         lastSent = row.receivedAt;
                     }
 
-                    // DB별 watermark 갱신
                     lastSentPerDb.put(dbName, lastSent);
                 }
             }
@@ -108,7 +100,7 @@ public class Main {
     }
 
     // ==================================================
-    // Backfill (batch + flush + pacing)
+    // Backfill (multi-DB interleaved replay)
     // ==================================================
     private static void runBackfill(String basePath, KafkaSender sender) throws Exception {
 
@@ -117,40 +109,69 @@ public class Main {
 
         if (dbFiles == null || dbFiles.length == 0) return;
 
-        final int FLUSH_EVERY = 5_000;
-        final int SLEEP_MS   = 5;
+        final int BATCH_PER_DB = 1000;   // DB당 한 번에 보낼 row 수
+        final int SLEEP_MS = 5;
 
+        class DbState {
+            final String name;
+            final Connection conn;
+            final RawLogRepository repo;
+            Instant lastSent = null;
+            boolean finished = false;
+
+            DbState(File db) throws Exception {
+                this.name = db.getName();
+                this.conn = SqliteClient.connect(db.getAbsolutePath());
+                this.repo = new RawLogRepository(conn);
+            }
+        }
+
+        List<DbState> states = new ArrayList<>();
         for (File db : dbFiles) {
+            states.add(new DbState(db));
+            System.out.println("[Backfill start] " + db.getName());
+        }
 
-            System.out.println("[Backfill] " + db.getName());
+        while (true) {
 
-            try (Connection conn = SqliteClient.connect(db.getAbsolutePath())) {
+            boolean allFinished = true;
 
-                RawLogRepository repo = new RawLogRepository(conn);
-                List<RawLogRow> rows = repo.findAllOrdered();
+            for (DbState state : states) {
 
-                int sent = 0;
+                if (state.finished) continue;
+                allFinished = false;
 
-                for (RawLogRow row : rows) {
-                    sender.send(row);
-                    sent++;
+                Instant from = (state.lastSent == null)
+                        ? Instant.EPOCH
+                        : state.lastSent;
 
-                    if (sent % FLUSH_EVERY == 0) {
-                        sender.flush();
-                        Thread.sleep(SLEEP_MS);
-                        System.out.printf(
-                            "[Backfill] %s sent=%d%n",
-                            db.getName(), sent
-                        );
-                    }
+                List<RawLogRow> rows =
+                        state.repo.findBetween(from, Instant.now());
+
+                if (rows.isEmpty()) {
+                    state.finished = true;
+                    System.out.println("[Backfill completed] " + state.name);
+                    continue;
                 }
 
-                sender.flush();
-                System.out.printf(
-                    "[Backfill completed] %s total=%d%n",
-                    db.getName(), sent
-                );
+                int sent = 0;
+                for (RawLogRow row : rows) {
+                    sender.send(row);
+                    state.lastSent = row.receivedAt;
+                    sent++;
+
+                    if (sent >= BATCH_PER_DB) break;
+                }
             }
+
+            sender.flush();
+            Thread.sleep(SLEEP_MS);
+
+            if (allFinished) break;
+        }
+
+        for (DbState state : states) {
+            state.conn.close();
         }
     }
 
