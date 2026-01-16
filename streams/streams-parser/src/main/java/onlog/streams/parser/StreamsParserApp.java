@@ -3,6 +3,7 @@ package onlog.streams.parser;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 
 import java.util.Properties;
 
@@ -69,13 +70,16 @@ public class StreamsParserApp {
         StreamsBuilder builder = new StreamsBuilder();
         ParserTopology.build(builder);
 
-        // 🔥 토폴로지 출력 (subscribe 여부 확인용)
+        // Build topology once
+        Topology topology = builder.build();
+
+        // 🔥 토폴로지 출력
         System.out.println("========== STREAMS TOPOLOGY ==========");
-        System.out.println(builder.build().describe());
+        System.out.println(topology.describe());
         System.out.println("======================================");
 
-        KafkaStreams streams =
-            new KafkaStreams(builder.build(), props);
+        // Create streams
+        KafkaStreams streams = new KafkaStreams(topology, props);
 
         // =========================
         // 🔥 상태 추적 (핵심)
