@@ -13,20 +13,37 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- JSON -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
 
+    <!-- Kafka -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
     </dependency>
 
+    <!-- Common model / serde -->
     <dependency>
       <groupId>onlog</groupId>
       <artifactId>common</artifactId>
       <version>1.0.0</version>
+    </dependency>
+
+    <!-- PostgreSQL JDBC (필수) -->
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.3</version>
+    </dependency>
+
+    <!-- Connection Pool (DataSource 사용 시 필수) -->
+    <dependency>
+      <groupId>com.zaxxer</groupId>
+      <artifactId>HikariCP</artifactId>
+      <version>5.1.0</version>
     </dependency>
   </dependencies>
 
