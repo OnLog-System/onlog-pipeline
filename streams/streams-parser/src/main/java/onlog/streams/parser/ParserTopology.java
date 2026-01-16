@@ -141,8 +141,26 @@ public class ParserTopology {
                 root.path("payload").asText()
             );
 
-            w.devEui = payload.path("deviceInfo").path("devEui").asText(null);
-            w.fCnt   = payload.has("fCnt") ? payload.get("fCnt").asInt() : null;
+
+            // -------------------------
+            // event_time (source time)
+            // -------------------------
+            String eventTimeStr =
+                payload.has("eventTime")
+                    ? payload.path("eventTime").asText(null)
+                    : payload.path("time").asText(null);
+
+            w.eventTime = TimeNormalizer.parseIso(eventTimeStr);
+
+            // -------------------------
+            // Device info
+            // -------------------------
+            JsonNode deviceInfo = payload.path("deviceInfo");
+
+            w.devEui      = deviceInfo.path("devEui").asText(null);
+            w.deviceName  = deviceInfo.path("deviceName").asText(null);
+
+            w.fCnt = payload.has("fCnt") ? payload.get("fCnt").asInt() : null;
 
             // =========================
             // Base64 payload decode
@@ -187,6 +205,7 @@ public class ParserTopology {
 
         CanonicalEvent e = new CanonicalEvent();
 
+        e.eventTime      = w.eventTime;
         e.edgeIngestTime = w.edgeIngestTime;
 
         e.tenantId = w.tenantId;
@@ -196,6 +215,7 @@ public class ParserTopology {
         e.devEui     = w.devEui;
         e.deviceType = w.deviceType;
         e.metric     = w.metric;
+        e.deviceName = w.deviceName;
 
         e.valueNum  = w.valueNum;
         e.valueBool = w.valueBool;

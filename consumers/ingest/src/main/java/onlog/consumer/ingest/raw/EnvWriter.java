@@ -35,7 +35,7 @@ public class EnvWriter {
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(SQL)) {
 
-            ps.setObject(1, e.edgeIngestTime);   // source_time placeholder
+            ps.setObject(1, e.eventTime);
             ps.setObject(2, e.edgeIngestTime);
 
             ps.setString(3, e.tenantId);
@@ -43,12 +43,13 @@ public class EnvWriter {
             ps.setString(5, e.process);
             ps.setString(6, e.deviceType);
             ps.setString(7, e.metric);
-            ps.setString(8, e.devEui);
+            ps.setString(8, e.deviceName);
+            ps.setString(9, e.devEui);
 
-            ps.setObject(9,  e.temperature);
-            ps.setObject(10, e.humidity);
-            ps.setObject(11, e.batteryMv);
-            ps.setString(12, e.sourceId);
+            ps.setObject(10, e.temperature);
+            ps.setObject(11, e.humidity);
+            ps.setObject(12, e.batteryMv);
+            ps.setString(13, e.sourceId);
 
             ps.executeUpdate();
         }

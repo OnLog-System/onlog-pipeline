@@ -13,6 +13,7 @@ public class CanonicalEvent {
     // =========================
     // Time (single source of truth)
     // =========================
+    public Instant eventTime;
     public Instant edgeIngestTime;
 
     // =========================
@@ -25,6 +26,7 @@ public class CanonicalEvent {
     public String devEui;
     public String deviceType;
     public String metric;
+    public String deviceName;
 
     // =========================
     // Value

@@ -9,6 +9,7 @@ import java.util.Map;
  */
 public class ParsedWrapper {
 
+    public Instant eventTime;
     public Instant edgeIngestTime;
 
     public String tenantId;
@@ -18,6 +19,7 @@ public class ParsedWrapper {
     public String devEui;
     public String deviceType;
     public String metric;
+    public String deviceName;
 
     // =========================
     // Decoded values

@@ -34,7 +34,7 @@ public class MachineWriter {
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(SQL)) {
 
-            ps.setObject(1, e.edgeIngestTime);
+            ps.setObject(1, e.eventTime);
             ps.setObject(2, e.edgeIngestTime);
 
             ps.setString(3, e.tenantId);
@@ -42,11 +42,12 @@ public class MachineWriter {
             ps.setString(5, e.process);
             ps.setString(6, e.deviceType);
             ps.setString(7, e.metric);
-            ps.setString(8, e.devEui);
+            ps.setString(8, e.deviceName);
+            ps.setString(9, e.devEui);
 
-            ps.setObject(9,  e.valueNum);
-            ps.setObject(10, e.valueBool);
-            ps.setString(11, e.sourceId);
+            ps.setObject(10,  e.valueNum);
+            ps.setObject(11, e.valueBool);
+            ps.setString(12, e.sourceId);
 
             ps.executeUpdate();
         }

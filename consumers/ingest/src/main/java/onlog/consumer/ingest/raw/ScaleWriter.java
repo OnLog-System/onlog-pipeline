@@ -34,7 +34,7 @@ public class ScaleWriter {
         try (Connection c = ds.getConnection();
              PreparedStatement ps = c.prepareStatement(SQL)) {
 
-            ps.setObject(1, e.edgeIngestTime);
+            ps.setObject(1, e.eventTime);
             ps.setObject(2, e.edgeIngestTime);
 
             ps.setString(3, e.tenantId);
@@ -42,15 +42,16 @@ public class ScaleWriter {
             ps.setString(5, e.process);
             ps.setString(6, e.deviceType);
             ps.setString(7, e.metric);
-            ps.setString(8, e.devEui);
+            ps.setString(8, e.deviceName);
+            ps.setString(9, e.devEui);
 
             if (e.valueNum != null) {
-                ps.setDouble(9, e.valueNum);
+                ps.setDouble(10, e.valueNum);
             } else {
-                ps.setNull(9, Types.DOUBLE);
+                ps.setNull(10, Types.DOUBLE);
             }
 
-            ps.setString(10, e.sourceId);
+            ps.setString(11, e.sourceId);
 
             ps.executeUpdate();
         }
