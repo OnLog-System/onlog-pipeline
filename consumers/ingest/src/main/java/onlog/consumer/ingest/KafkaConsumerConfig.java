@@ -2,7 +2,7 @@ package onlog.consumer.ingest;
 
 import onlog.common.serde.CanonicalEventSerde;
 import onlog.common.serde.JsonSerde;
-import onlog.streams.kpi.KpiEvent;
+import onlog.common.model.KpiEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 

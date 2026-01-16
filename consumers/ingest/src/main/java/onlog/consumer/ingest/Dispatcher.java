@@ -2,11 +2,11 @@ package onlog.consumer.ingest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import onlog.common.model.CanonicalEvent;
+import onlog.common.model.KpiEvent;
 import onlog.consumer.ingest.kpi.KpiWriter;
 import onlog.consumer.ingest.raw.EnvWriter;
 import onlog.consumer.ingest.raw.MachineWriter;
 import onlog.consumer.ingest.raw.ScaleWriter;
-import onlog.streams.kpi.KpiEvent;
 
 public class Dispatcher {
 

@@ -1,7 +1,7 @@
 package onlog.consumer.ingest.kpi;
 
 import onlog.consumer.ingest.DbConnectionPool;
-import onlog.streams.kpi.KpiEvent;
+import onlog.common.model.KpiEvent;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
