@@ -71,6 +71,7 @@ docker run -d \
   -e KAFKA_BOOTSTRAP_SERVERS \
   -e DB_BASE_PATH \
   -e PRODUCER_MODE \
+  -e BACKFILL_CUTOFF \
   -v /home/ubuntu/.aws:/root/.aws:ro \
   -v "$DB_BASE_PATH:$DB_BASE_PATH" \
   $IMAGE
