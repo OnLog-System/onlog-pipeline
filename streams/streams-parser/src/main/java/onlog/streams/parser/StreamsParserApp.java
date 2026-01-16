@@ -12,32 +12,62 @@ public class StreamsParserApp {
 
         Properties props = new Properties();
 
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG,
-                ParserConfig.APPLICATION_ID);
+        // =========================
+        // Core
+        // =========================
+        props.put(
+            StreamsConfig.APPLICATION_ID_CONFIG,
+            ParserConfig.APPLICATION_ID
+        );
 
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG,
-                System.getenv("KAFKA_BOOTSTRAP"));
+        props.put(
+            StreamsConfig.BOOTSTRAP_SERVERS_CONFIG,
+            System.getenv("KAFKA_BOOTSTRAP")
+        );
 
-        // props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-        //         StreamsConfig.EXACTLY_ONCE_V2);
+        // =========================
+        // MSK IAM (🔥 필수 🔥)
+        // =========================
+        props.put("security.protocol", "SASL_SSL");
+        props.put("sasl.mechanism", "AWS_MSK_IAM");
+        props.put(
+            "sasl.jaas.config",
+            "software.amazon.msk.auth.iam.IAMLoginModule required;"
+        );
+        props.put(
+            "sasl.client.callback.handler.class",
+            "software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        );
 
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.Serdes$StringSerde");
+        // =========================
+        // Serde / Time
+        // =========================
+        props.put(
+            StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG,
+            "org.apache.kafka.common.serialization.Serdes$StringSerde"
+        );
 
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
-                "org.apache.kafka.common.serialization.Serdes$StringSerde");
+        props.put(
+            StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG,
+            "org.apache.kafka.common.serialization.Serdes$StringSerde"
+        );
 
-        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                EdgeIngestTimeExtractor.class);
+        props.put(
+            StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+            EdgeIngestTimeExtractor.class
+        );
 
+        // =========================
+        // Build & Start
+        // =========================
         StreamsBuilder builder = new StreamsBuilder();
         ParserTopology.build(builder);
 
         KafkaStreams streams =
-                new KafkaStreams(builder.build(), props);
+            new KafkaStreams(builder.build(), props);
 
         Runtime.getRuntime().addShutdownHook(
-                new Thread(streams::close)
+            new Thread(streams::close)
         );
 
         streams.start();
