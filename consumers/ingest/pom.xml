@@ -13,51 +13,65 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- SLF4J API (Kafka 3.x 기준) -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>2.0.13</version>
+    </dependency>
+
+    <!-- Logback (SLF4J Provider) -->
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.5.6</version>
+    </dependency>
+
+    <!-- Kafka Client -->
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-clients</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-nop</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- JSON -->
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
 
-    <!-- Kafka -->
-    <dependency>
-      <groupId>org.apache.kafka</groupId>
-      <artifactId>kafka-clients</artifactId>
-    </dependency>
-
-    <!-- Common model / serde -->
+    <!-- Common -->
     <dependency>
       <groupId>onlog</groupId>
       <artifactId>common</artifactId>
       <version>1.0.0</version>
     </dependency>
 
-    <!-- PostgreSQL JDBC (필수) -->
+    <!-- DB -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>42.7.3</version>
     </dependency>
 
-    <!-- Connection Pool (DataSource 사용 시 필수) -->
     <dependency>
       <groupId>com.zaxxer</groupId>
       <artifactId>HikariCP</artifactId>
       <version>5.1.0</version>
     </dependency>
-
-    <!-- Logback -->
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.5.6</version>
-    </dependency>
   </dependencies>
 
   <build>
     <plugins>
-
-      <!-- 실행 가능한 Consumer JAR -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -71,22 +85,19 @@
 
             <configuration>
               <transformers>
-                <transformer
-                  implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>
-                    onlog.consumer.ingest.IngestApp
-                  </mainClass>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>onlog.consumer.ingest.IngestApp</mainClass>
                 </transformer>
+
+                <!-- ★ SLF4J 2.x 필수 -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
 
               <shadedArtifactAttached>false</shadedArtifactAttached>
             </configuration>
-
           </execution>
         </executions>
       </plugin>
-
     </plugins>
   </build>
-
 </project>

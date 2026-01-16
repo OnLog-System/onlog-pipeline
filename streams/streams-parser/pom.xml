@@ -13,9 +13,34 @@
   <packaging>jar</packaging>
 
   <dependencies>
+    <!-- SLF4J API -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>2.0.13</version>
+    </dependency>
+
+    <!-- Logback -->
+    <dependency>
+      <groupId>ch.qos.logback</groupId>
+      <artifactId>logback-classic</artifactId>
+      <version>1.5.6</version>
+    </dependency>
+
+    <!-- Kafka Streams -->
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-streams</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-nop</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-simple</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <dependency>
@@ -28,24 +53,14 @@
       <artifactId>common</artifactId>
       <version>1.0.0</version>
     </dependency>
-
-    <!-- Logback -->
-    <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.5.6</version>
-    </dependency>
   </dependencies>
 
   <build>
     <plugins>
-
-      <!-- 실행 가능한 fat JAR 생성 -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
 
-        <!-- 버전은 root pluginManagement에서 가져옴 -->
         <executions>
           <execution>
             <phase>package</phase>
@@ -54,25 +69,19 @@
             </goals>
 
             <configuration>
-              <!-- 실행 시 필요한 MANIFEST 설정 -->
               <transformers>
-                <transformer
-                  implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>
-                    onlog.streams.parser.StreamsParserApp
-                  </mainClass>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>onlog.streams.parser.StreamsParserApp</mainClass>
                 </transformer>
+
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
               </transformers>
 
-              <!-- 원본 JAR 덮어쓰기 -->
               <shadedArtifactAttached>false</shadedArtifactAttached>
             </configuration>
-
           </execution>
         </executions>
       </plugin>
-
     </plugins>
   </build>
-
 </project>
