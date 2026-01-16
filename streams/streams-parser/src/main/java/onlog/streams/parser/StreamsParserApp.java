@@ -25,8 +25,14 @@ public class StreamsParserApp {
             System.getenv("KAFKA_BOOTSTRAP")
         );
 
+        // ⚠️ state.dir 명시 (lock / 충돌 방지)
+        props.put(
+            StreamsConfig.STATE_DIR_CONFIG,
+            "/tmp/kafka-streams-parser"
+        );
+
         // =========================
-        // MSK IAM (🔥 필수 🔥)
+        // MSK IAM (필수)
         // =========================
         props.put("security.protocol", "SASL_SSL");
         props.put("sasl.mechanism", "AWS_MSK_IAM");
@@ -58,18 +64,46 @@ public class StreamsParserApp {
         );
 
         // =========================
-        // Build & Start
+        // Build topology
         // =========================
         StreamsBuilder builder = new StreamsBuilder();
         ParserTopology.build(builder);
 
+        // 🔥 토폴로지 출력 (subscribe 여부 확인용)
+        System.out.println("========== STREAMS TOPOLOGY ==========");
+        System.out.println(builder.build().describe());
+        System.out.println("======================================");
+
         KafkaStreams streams =
             new KafkaStreams(builder.build(), props);
 
+        // =========================
+        // 🔥 상태 추적 (핵심)
+        // =========================
+        streams.setStateListener((newState, oldState) -> {
+            System.out.println(
+                "### STREAMS STATE: " + oldState + " -> " + newState
+            );
+        });
+
+        // =========================
+        // 🔥 예외 추적 (핵심)
+        // =========================
+        streams.setUncaughtExceptionHandler((thread, throwable) -> {
+            System.err.println(
+                "### UNCAUGHT EXCEPTION in thread: " + thread.getName()
+            );
+            throwable.printStackTrace();
+        });
+
         Runtime.getRuntime().addShutdownHook(
-            new Thread(streams::close)
+            new Thread(() -> {
+                System.out.println("### SHUTDOWN");
+                streams.close();
+            })
         );
 
+        System.out.println("### STARTING STREAMS");
         streams.start();
     }
 }
