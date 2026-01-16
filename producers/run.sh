@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ######################################
-# 0. .env 자동 생성 (최초 1회)
+# 0. .env 생성
 ######################################
 if [ ! -f .env ]; then
   echo "[INFO] .env not found. Creating from env.example"
@@ -17,35 +17,40 @@ source .env
 set +a
 
 ######################################
-# 2. 필수 환경변수 검증
+# 2. 필수 변수 검증
 ######################################
-: "${KAFKA_BOOTSTRAP_SERVERS:?KAFKA_BOOTSTRAP_SERVERS is required}"
-: "${DB_BASE_PATH:?DB_BASE_PATH is required}"
-: "${TOPIC_PREFIX:?TOPIC_PREFIX is required}"
+: "${KAFKA_BOOTSTRAP_SERVERS:?}"
+: "${DB_BASE_PATH:?}"
+: "${PRODUCER_MODE:=realtime}"
 
 ######################################
 # 3. Docker 설정
 ######################################
 IMAGE=onlog/msk-producer:latest
-CONTAINER=onlog-msk-producer
+CONTAINER=onlog-msk-producer-${PRODUCER_MODE}
 
-echo "[1/4] Build image"
+echo "[MODE] $PRODUCER_MODE"
+
 docker build -t $IMAGE .
 
-echo "[2/4] Stop existing container (if any)"
 docker rm -f $CONTAINER 2>/dev/null || true
 
-echo "[3/4] Run container"
+# ---- mode별 run 옵션 ----
+if [ "$PRODUCER_MODE" = "realtime" ]; then
+  RESTART_OPT="--restart unless-stopped"
+else
+  RESTART_OPT=""
+fi
+
 docker run -d \
   --name $CONTAINER \
-  --restart unless-stopped \
+  $RESTART_OPT \
   -e AWS_REGION=ap-northeast-2 \
   -e KAFKA_BOOTSTRAP_SERVERS \
   -e DB_BASE_PATH \
-  -e TOPIC_PREFIX \
+  -e PRODUCER_MODE \
   -v /home/ubuntu/.aws:/root/.aws:ro \
   -v "$DB_BASE_PATH:$DB_BASE_PATH:ro" \
   $IMAGE
 
-echo "[4/4] Done"
-docker ps | grep $CONTAINER
+docker ps | grep $CONTAINER || true
