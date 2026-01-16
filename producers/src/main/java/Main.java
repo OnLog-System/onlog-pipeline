@@ -41,7 +41,7 @@ public class Main {
     }
 
     // ==================================================
-    // Realtime (event-time replay, DB별 독립 watermark)
+    // Realtime (항상 실행, 자기 기준으로만)
     // ==================================================
     private static void runRealtime(String basePath, KafkaSender sender) throws Exception {
 
@@ -55,7 +55,8 @@ public class Main {
 
         Map<String, Instant> lastSentPerDb = new HashMap<>();
 
-        System.out.println("[Realtime] event-time based replay (per DB)");
+        Instant realtimeStart = Instant.now();
+        System.out.println("[Realtime start] T0=" + realtimeStart);
 
         while (true) {
 
@@ -67,11 +68,8 @@ public class Main {
                 Instant lastSent = lastSentPerDb.get(dbName);
 
                 if (lastSent == null) {
-                    lastSent = now.minusSeconds(10);
+                    lastSent = realtimeStart;
                     lastSentPerDb.put(dbName, lastSent);
-                    System.out.println(
-                        "[Realtime start] db=" + dbName + " from " + lastSent
-                    );
                 }
 
                 try (Connection conn = SqliteClient.connect(db.getAbsolutePath())) {
@@ -100,23 +98,30 @@ public class Main {
     }
 
     // ==================================================
-    // Backfill (multi-DB interleaved replay)
+    // Backfill (Realtime 시작 시점 이전까지만)
     // ==================================================
     private static void runBackfill(String basePath, KafkaSender sender) throws Exception {
+
+        String cutoffStr = getenv("BACKFILL_CUTOFF");
+        Instant cutoffTime = Instant.parse(cutoffStr);
+
+        System.out.println("[Backfill cutoff] " + cutoffTime);
 
         File[] dbFiles = new File(basePath)
                 .listFiles(f -> f.getName().endsWith(".sqlite"));
 
         if (dbFiles == null || dbFiles.length == 0) return;
 
-        final int BATCH_PER_DB = 1000;   // DB당 한 번에 보낼 row 수
-        final int SLEEP_MS = 5;
+        final int BATCH_SIZE = 1_000;
+        final int LOG_EVERY  = 10_000;
+        final int SLEEP_MS  = 5;
 
         class DbState {
             final String name;
             final Connection conn;
             final RawLogRepository repo;
-            Instant lastSent = null;
+            Instant cursor = Instant.EPOCH;
+            long sent = 0;
             boolean finished = false;
 
             DbState(File db) throws Exception {
@@ -128,51 +133,57 @@ public class Main {
 
         List<DbState> states = new ArrayList<>();
         for (File db : dbFiles) {
-            states.add(new DbState(db));
-            System.out.println("[Backfill start] " + db.getName());
+            DbState s = new DbState(db);
+            states.add(s);
+            System.out.println("[Backfill start] " + s.name);
         }
 
-        while (true) {
+        boolean running = true;
 
-            boolean allFinished = true;
+        while (running) {
+
+            running = false;
 
             for (DbState state : states) {
 
                 if (state.finished) continue;
-                allFinished = false;
-
-                Instant from = (state.lastSent == null)
-                        ? Instant.EPOCH
-                        : state.lastSent;
+                running = true;
 
                 List<RawLogRow> rows =
-                        state.repo.findBetween(from, Instant.now());
+                        state.repo.findBetween(state.cursor, cutoffTime, BATCH_SIZE);
 
                 if (rows.isEmpty()) {
                     state.finished = true;
-                    System.out.println("[Backfill completed] " + state.name);
+                    System.out.printf(
+                        "[Backfill completed] %s total=%d%n",
+                        state.name, state.sent
+                    );
                     continue;
                 }
 
-                int sent = 0;
                 for (RawLogRow row : rows) {
                     sender.send(row);
-                    state.lastSent = row.receivedAt;
-                    sent++;
+                    state.cursor = row.receivedAt;
+                    state.sent++;
 
-                    if (sent >= BATCH_PER_DB) break;
+                    if (state.sent % LOG_EVERY == 0) {
+                        System.out.printf(
+                            "[Backfill progress] %s sent=%d%n",
+                            state.name, state.sent
+                        );
+                    }
                 }
             }
 
             sender.flush();
             Thread.sleep(SLEEP_MS);
-
-            if (allFinished) break;
         }
 
-        for (DbState state : states) {
-            state.conn.close();
+        for (DbState s : states) {
+            s.conn.close();
         }
+
+        System.out.println("[Backfill] all DBs completed");
     }
 
     // ==================================================

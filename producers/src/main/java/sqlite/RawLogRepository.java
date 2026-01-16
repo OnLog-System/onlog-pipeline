@@ -13,7 +13,6 @@ public class RawLogRepository {
 
     private final Connection conn;
 
-    // payload 내 devEui 추출 (파싱 ❌, 문자열 처리만)
     private static final Pattern DEV_EUI_PATTERN =
             Pattern.compile("\"devEui\"\\s*:\\s*\"([^\"]+)\"");
 
@@ -22,9 +21,10 @@ public class RawLogRepository {
     }
 
     /**
-     * (from, to] 구간의 데이터를 전부 가져온다
+     * Realtime / Backfill 공용
+     * (from, to] + LIMIT
      */
-    public List<RawLogRow> findBetween(Instant from, Instant to) throws Exception {
+    public List<RawLogRow> findBetween(Instant from, Instant to, int limit) throws Exception {
 
         String sql = """
             SELECT id, received_at, topic, tenant_id, line_id,
@@ -33,6 +33,7 @@ public class RawLogRepository {
             WHERE received_at > ?
               AND received_at <= ?
             ORDER BY received_at ASC
+            LIMIT ?
         """;
 
         List<RawLogRow> rows = new ArrayList<>();
@@ -40,25 +41,11 @@ public class RawLogRepository {
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, from.toString());
             ps.setString(2, to.toString());
+            ps.setInt(3, limit);
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    RawLogRow r = new RawLogRow();
-
-                    r.id = rs.getLong("id");
-                    r.receivedAt = Instant.parse(rs.getString("received_at"));
-                    r.topic = rs.getString("topic");
-
-                    r.tenantId = rs.getString("tenant_id");
-                    r.lineId = rs.getString("line_id");
-                    r.process = rs.getString("process");
-                    r.deviceType = rs.getString("device_type");
-                    r.metric = rs.getString("metric");
-
-                    r.payload = rs.getString("payload");
-                    r.devEui = extractDevEui(r.payload);
-
-                    rows.add(r);
+                    rows.add(mapRow(rs));
                 }
             }
         }
@@ -66,42 +53,30 @@ public class RawLogRepository {
     }
 
     /**
-     * Backfill 전용
+     * Realtime용 (window)
      */
-    public List<RawLogRow> findAllOrdered() throws Exception {
+    public List<RawLogRow> findBetween(Instant from, Instant to) throws Exception {
+        return findBetween(from, to, Integer.MAX_VALUE);
+    }
 
-        String sql = """
-            SELECT id, received_at, topic, tenant_id, line_id,
-                   process, device_type, metric, payload
-            FROM raw_logs
-            ORDER BY received_at ASC
-        """;
+    private RawLogRow mapRow(ResultSet rs) throws Exception {
 
-        List<RawLogRow> rows = new ArrayList<>();
+        RawLogRow r = new RawLogRow();
 
-        try (PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        r.id = rs.getLong("id");
+        r.receivedAt = Instant.parse(rs.getString("received_at"));
+        r.topic = rs.getString("topic");
 
-            while (rs.next()) {
-                RawLogRow r = new RawLogRow();
+        r.tenantId = rs.getString("tenant_id");
+        r.lineId = rs.getString("line_id");
+        r.process = rs.getString("process");
+        r.deviceType = rs.getString("device_type");
+        r.metric = rs.getString("metric");
 
-                r.id = rs.getLong("id");
-                r.receivedAt = Instant.parse(rs.getString("received_at"));
-                r.topic = rs.getString("topic");
+        r.payload = rs.getString("payload");
+        r.devEui = extractDevEui(r.payload);
 
-                r.tenantId = rs.getString("tenant_id");
-                r.lineId = rs.getString("line_id");
-                r.process = rs.getString("process");
-                r.deviceType = rs.getString("device_type");
-                r.metric = rs.getString("metric");
-
-                r.payload = rs.getString("payload");
-                r.devEui = extractDevEui(r.payload);
-
-                rows.add(r);
-            }
-        }
-        return rows;
+        return r;
     }
 
     private String extractDevEui(String payload) {
