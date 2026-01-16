@@ -1,6 +1,7 @@
 package onlog.streams.kpi;
 
 import onlog.common.model.CanonicalEvent;
+import onlog.common.model.KpiEvent;
 import onlog.common.serde.CanonicalEventSerde;
 import onlog.common.serde.JsonSerde;
 import org.apache.kafka.common.serialization.Serdes;

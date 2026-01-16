@@ -1,4 +1,4 @@
-package onlog.streams.kpi;
+package onlog.common.model;
 
 public class KpiEvent {
 
