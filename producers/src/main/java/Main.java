@@ -7,7 +7,9 @@ import sqlite.SqliteClient;
 import java.io.File;
 import java.sql.Connection;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Main {
 
@@ -41,11 +43,9 @@ public class Main {
     }
 
     // ==================================================
-    // Realtime (event-time replay, wall-clock driven)
+    // Realtime (event-time replay, DB별 독립 watermark)
     // ==================================================
     private static void runRealtime(String basePath, KafkaSender sender) throws Exception {
-
-        Instant lastSentTime = null;
 
         File[] dbFiles = new File(basePath)
                 .listFiles(f -> f.getName().endsWith(".sqlite"));
@@ -55,39 +55,51 @@ public class Main {
             return;
         }
 
-        System.out.println("[Realtime] event-time based replay");
+        // 🔑 DB별 lastSentTime
+        Map<String, Instant> lastSentPerDb = new HashMap<>();
+
+        System.out.println("[Realtime] event-time based replay (per DB)");
 
         while (true) {
 
             Instant now = Instant.now();
 
-            if (lastSentTime == null) {
-                // 최초 시작 시점: 현재보다 살짝 과거
-                lastSentTime = now.minusSeconds(10);
-                System.out.println("[Realtime start] from " + lastSentTime);
-            }
-
             for (File db : dbFiles) {
+
+                String dbName = db.getName();
+                Instant lastSent = lastSentPerDb.get(dbName);
+
+                if (lastSent == null) {
+                    // DB별 최초 시작 시점
+                    lastSent = now.minusSeconds(10);
+                    lastSentPerDb.put(dbName, lastSent);
+                    System.out.println(
+                        "[Realtime start] db=" + dbName + " from " + lastSent
+                    );
+                }
 
                 try (Connection conn = SqliteClient.connect(db.getAbsolutePath())) {
 
                     RawLogRepository repo = new RawLogRepository(conn);
-                    List<RawLogRow> rows = repo.findBetween(lastSentTime, now);
+                    List<RawLogRow> rows = repo.findBetween(lastSent, now);
 
                     if (!rows.isEmpty()) {
                         System.out.printf(
                             "[Realtime] db=%s rows=%d (%s → %s)%n",
-                            db.getName(),
+                            dbName,
                             rows.size(),
-                            lastSentTime,
+                            lastSent,
                             now
                         );
                     }
 
                     for (RawLogRow row : rows) {
                         sender.send(row);
-                        lastSentTime = row.receivedAt;
+                        lastSent = row.receivedAt;
                     }
+
+                    // DB별 watermark 갱신
+                    lastSentPerDb.put(dbName, lastSent);
                 }
             }
 
